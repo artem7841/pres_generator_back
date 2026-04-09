@@ -23,12 +23,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Content Include="..\.dockerignore">
-        <Link>.dockerignore</Link>
-      </Content>
-    </ItemGroup>
-
-    <ItemGroup>
         <ProjectReference Include="..\PresentationApi.Core\PresentationApi.Core.csproj" />
         <ProjectReference Include="..\PresentationApi.Infrastructure\PresentationApi.Infrastructure.csproj" />
     </ItemGroup>
