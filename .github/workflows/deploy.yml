@@ -21,6 +21,18 @@ jobs:
           source: "."
           target: "/var/www/backend"
 
+      - name: Debug files on server
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            echo "=== ROOT ==="
+            ls -la /var/www
+            echo "=== BACKEND ==="
+            ls -la /var/www/backend
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v0.1.6
         with:
