@@ -5,9 +5,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    env_file:
-      - .env  
     volumes:
       - ./PresentationApi/Data:/app/Data
     ports:
-      - "5204:5000"
