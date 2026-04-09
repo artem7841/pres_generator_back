@@ -7,6 +7,7 @@ COPY PresentationCreator.sln ./
 COPY PresentationApi/PresentationApi.csproj ./PresentationApi/
 COPY PresentationApi.Core/PresentationApi.Core.csproj ./PresentationApi.Core/
 COPY PresentationApi.Infrastructure/PresentationApi.Infrastructure.csproj ./PresentationApi.Infrastructure/
+COPY TestPresentation/ ./TestPresentation/
 
 RUN dotnet restore
 
