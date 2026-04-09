@@ -9,6 +9,6 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - CONNECTION_STRING=Data/database.db
     volumes:
-      - ./PresentattionApi/Data:/app/Data
+      - ./PresentationApi/Data:/app/Data
     ports:
       - "5000:5000"
