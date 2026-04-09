@@ -1,0 +1,24 @@
+@PresentationApi_HostAddress = http://localhost:5204
+
+###
+POST {{PresentationApi_HostAddress}}//api/auth/request-code
+Content-Type: application/json
+
+{
+    "Email" : "17artem12@gmail.com"
+}
+
+
+###
+POST {{PresentationApi_HostAddress}}//api/auth/login
+Content-Type: application/json
+
+{
+  "Email" : "17artem12@gmail.com",
+  "Code" : "2971"
+}
+
+###
+GET {{PresentationApi_HostAddress}}//data
+Authorization: Bearer {{$auth.token("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9lbWFpbGFkZHJlc3MiOiIxN2FydGVtMTJAZ21haWwuY29tIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIiLCJqdGkiOiIyNDExNjBkMy0xMDBlLTRiYjQtOTIxZC00YTUzZDFiMGM3ZWYiLCJleHAiOjE3NzUxMjY5MTcsImlzcyI6IlByZXNlbnRhdGlvbkNyZWF0b3IiLCJhdWQiOiJQcmVzZW50YXRpb25DcmVhdG9yQ2xpZW50In0.Ep00Dwgi6lkTpWth365nnZCBFv6bY1Ol2G-grfUBdso")}}
+

@@ -1,0 +1,305 @@
+using System.Security.Claims;
+using System.Text;
+using DotNetEnv;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using PresentationApi.Data;
+using PresentationApi.Infrastructure.repositories;
+using PresentationCreator;
+using PresentationCreator.interfaces;
+using PresentationCreator.Models;
+
+var solutionRoot = FindSolutionRoot();
+var envPath = Path.Combine(solutionRoot, ".env");
+        
+if (File.Exists(envPath))
+{
+    Env.Load(envPath);
+}
+else
+{
+    Console.WriteLine($"Warning: .env not found at {envPath}");
+    Env.Load();
+}
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend",
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:5173",
+                    "http://10.0.2.2:3000",  
+                    "http://127.0.0.1:3000")
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials()
+                .WithExposedHeaders("X-Presentation-Id");;
+        });
+});
+
+
+var authOptions = new AuthOptions
+{
+    Issuer = builder.Configuration["AuthOptions:Issuer"] ?? "PresentationCreator",
+    Audience = builder.Configuration["AuthOptions:Audience"] ?? "PresentationCreatorClient",
+    SecretKey = Environment.GetEnvironmentVariable("AUTH_SECRET_KEY") 
+                ?? throw new InvalidOperationException("AUTH_SECRET_KEY is missing"),
+    TokenLifetime = 21600
+};
+
+builder.Services.Configure<AuthOptions>(opts =>
+{
+    opts.Issuer = authOptions.Issuer;
+    opts.Audience = authOptions.Audience;
+    opts.SecretKey = authOptions.SecretKey;
+    opts.TokenLifetime = authOptions.TokenLifetime;
+});
+
+
+builder.Services.AddAuthorization();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = authOptions.Issuer,
+            ValidateAudience = true,
+            ValidAudience = authOptions.Audience,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(authOptions.SecretKey)),
+        };
+    });
+
+var smtpSettings = new SmtpSettings
+{
+    Host = builder.Configuration["Smtp:Host"] ?? "smtp.yandex.ru",
+    Port = int.Parse(builder.Configuration["Smtp:Port"] ?? "587"),
+    Username = Environment.GetEnvironmentVariable("SMTP_USERNAME") 
+               ?? throw new InvalidOperationException("SMTP_USERNAME is missing"),
+    Password = Environment.GetEnvironmentVariable("PASSWORD_YANDEX_MAIL") 
+               ?? throw new InvalidOperationException("PASSWORD_YANDEX_MAIL is missing"),
+    From = Environment.GetEnvironmentVariable("SMTP_FROM") 
+           ?? throw new InvalidOperationException("SMTP_FROM is missing"),
+    FromName = builder.Configuration["Smtp:FromName"] ?? "Authentication Service",
+    EnableSsl = bool.Parse(builder.Configuration["Smtp:EnableSsl"] ?? "true")
+};
+
+builder.Services.Configure<SmtpSettings>(opts =>
+{
+    opts.Host = smtpSettings.Host;
+    opts.Port = smtpSettings.Port;
+    opts.Username = smtpSettings.Username;
+    opts.Password = smtpSettings.Password;
+    opts.From = smtpSettings.From;
+    opts.FromName = smtpSettings.FromName;
+    opts.EnableSsl = smtpSettings.EnableSsl;
+});
+
+builder.Services.AddOpenApi();
+builder.Services.AddScoped<IService, Service>();
+builder.Services.AddScoped<Random>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<ICodeRepo, CodeRepo>();
+builder.Services.AddScoped<IUserRepo, UserRepo>();
+builder.Services.AddScoped<IFileRepo, FileRepo>();
+
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAiHandler, AiHandler>();
+builder.Services.AddScoped<IPptxToPdfConverter, PptxToPdfConverter>();
+builder.Services.AddScoped<ISlideController, SlideController>();
+builder.Services.AddScoped<PresentationRequest>();
+builder.Services.AddScoped<TextRequest>();
+builder.Services.AddScoped<YandexImageSearchService>();
+builder.Services.AddScoped<AppDbContext>();
+
+var app = builder.Build();
+
+using var scope = app.Services.CreateScope();
+var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+dbContext.Database.Migrate();
+
+app.UseCors("AllowFrontend");
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
+
+app.UseHttpsRedirection();
+app.UseAuthentication(); 
+app.UseAuthorization();
+
+
+
+app.MapPost("/api/auth/request-code", async (IAuthService authService, [FromBody] EmailRequest request) =>
+{
+    var result =  await authService.SendCodeOnEmail(request.Email);
+    return Results.Ok(result);
+})
+.Accepts<TextRequest>("application/json");
+
+app.MapPost("/api/auth/login", async (IAuthService authService, [FromBody] EmailCodeLogin request) => 
+    { 
+        try
+        {
+            var result = await authService.ApproveCode(request.Email, request.Code);
+            return Results.Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(ex.Message);
+        }
+    })
+    .Accepts<TextRequest>("application/json");
+
+
+
+app.MapPost("/api/text/generate", (IService service, IAiHandler aiHandler, [FromBody] TextRequest request) =>
+{
+    return service.GetText(request.Text, aiHandler);
+})
+.Accepts<TextRequest>("application/json");
+
+app.MapGet("/data", [Authorize] (HttpContext context) => 
+{
+    return "Hello";
+});
+
+app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpContext, 
+    IService service, 
+    YandexImageSearchService yandexImageSearchService, 
+    ISlideController slideController,
+    IAiHandler aiHandler,
+    IPptxToPdfConverter presentationConverter,
+    IFileRepo fileRepo,
+    [FromBody] PresentationRequest request) =>
+{
+    try
+    {
+        var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null)
+        {
+            return Results.Unauthorized();
+        }
+        var userId = int.Parse(userIdClaim.Value);
+  
+        var result = await service.GetPresenation(
+            request.Prompt, 
+            request.Text, 
+            userId,
+            yandexImageSearchService, 
+            slideController, 
+            aiHandler, 
+            presentationConverter, 
+            fileRepo
+            );
+        
+        httpContext.Response.Headers.Append("X-Presentation-Id", result.Id);
+        
+        return Results.File(
+            result.Data, 
+            "application/pdf", 
+            $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest($"Ошибка при создании презентации: {ex.Message}");
+    }
+});
+
+
+app.MapPost("/api/presentation/correct", [Authorize] async (HttpContext context, IService service, IFileRepo fileRepo,
+    [FromBody] PresentationCorrectRequest request, YandexImageSearchService yandexImageSearchService, 
+    ISlideController slideController,
+    IAiHandler aiHandler,
+    IPptxToPdfConverter presentationConverter) =>
+{
+    var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier);
+    if (userIdClaim == null)
+    {
+        return Results.Unauthorized();
+    }
+    var userId = int.Parse(userIdClaim.Value);
+    
+    var result = await service.CorrectPresenation(
+        request.id, 
+        request.prompt, 
+        userId,
+        yandexImageSearchService, 
+        slideController, 
+        aiHandler, 
+        presentationConverter, 
+        fileRepo);
+    
+    if (result ==  null)
+        return Results.NotFound();
+    
+    return Results.File(
+        result.Data,
+        "application/pdf",
+        $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+});
+    
+
+app.MapGet("/api/presentation/pptx/{id}", [Authorize] async (int id, IService service, IFileRepo fileRepo) =>
+{
+    try
+    {
+        var result = await service.GetPresenationPptx(id, fileRepo);
+        Console.WriteLine(result.Length+ "fd");
+        return Results.File(
+            result, 
+            "application/pptx", 
+            $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pptx");
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest($"Ошибка при создании презентации: {ex.Message}");
+    }
+    
+});
+
+app.MapGet("/api/presentation/all", [Authorize] async (IFileRepo fileRepo, HttpContext httpContext) =>
+{
+    try
+    {
+        var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var userId = int.Parse(userIdClaim.Value);
+        var files = await fileRepo.GetAllFiles(userId);
+        return Results.Ok(files);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest($"Ошибка получения проектов: {ex.Message}");
+    }
+
+});
+
+
+app.Run();
+
+
+string FindSolutionRoot()
+{
+    var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+    while (directory != null)
+    {
+        if (directory.GetFiles("*.sln").Any())
+            return directory.FullName;
+        directory = directory.Parent;
+    }
+    return Directory.GetCurrentDirectory();
+}
+
