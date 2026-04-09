@@ -23,6 +23,6 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
           script: |
-            cd /path/to/project
+            cd /var/www/backend
             docker-compose pull
             docker-compose up -d --build
