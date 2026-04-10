@@ -19,9 +19,10 @@ public class AuthService : IAuthService
     private ICodeRepo _codeRepo;
     private readonly AuthOptions _authOptions;
     private IUserRepo _userRepo;
+    private IJwtGenerator _jwtGenerator;
 
     public AuthService(IOptions<AuthOptions> authOptions, IEmailService emailService, 
-        IOptions<SmtpSettings> settings, Random random, ICodeRepo codeRepo, IUserRepo userRepo)
+        IOptions<SmtpSettings> settings, Random random, ICodeRepo codeRepo, IUserRepo userRepo,  IJwtGenerator jwtGenerator)
     {
         _authOptions = authOptions.Value;
         _emailService = emailService;
@@ -67,24 +68,20 @@ public class AuthService : IAuthService
         }
         if (DateTime.Now < lastCode.ExpiresAt && code == lastCode.Code)
         {
-            User user = await _userRepo.AddUserIfNotExist(email); 
-            
-            var claims = new List<Claim>
+            User user = new User()
             {
-                new Claim(ClaimTypes.Email, email),
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                Email = email,
+                AvatarUrl = null,
+                CreatedAt = DateTime.Now,
+                FirebaseUid = null,
+                GoogleId = null,
+                HasActiveSubscription = false,
+                Name = email
             };
             
-            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_authOptions.SecretKey));
-            var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
-
-            var jwt = new JwtSecurityToken(
-                issuer: _authOptions.Issuer,
-                audience: _authOptions.Audience,
-                claims: claims,
-                expires: DateTime.UtcNow.Add(TimeSpan.FromDays(_authOptions.TokenLifetime)),
-                signingCredentials: signingCredentials);
+            User newUser = await _userRepo.AddUserIfNotExist(user);
+            
+            var jwt = _jwtGenerator.GenerateJwtToken(newUser);
             
             var accessToken = new JwtSecurityTokenHandler().WriteToken(jwt);
             var refreshToken = GenerateRefreshToken();

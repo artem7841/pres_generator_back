@@ -4,5 +4,5 @@ namespace PresentationCreator.interfaces;
 
 public interface IUserRepo
 {
-    Task<User> AddUserIfNotExist(string email);
+    Task<User> AddUserIfNotExist(User user);
 }

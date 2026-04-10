@@ -16,21 +16,31 @@ public class UserRepo : IUserRepo
         _dbSet = _dbSet = context.Set<User>();;
     }
 
-    public async Task<User> AddUserIfNotExist(string email)
+    public async Task<User> AddUserIfNotExist(User user)
     {
-        var userBd = await _dbSet.Where(u => u.Email == email).FirstOrDefaultAsync();
+        var userBd = await _dbSet.Where(u => u.Email == user.Email).FirstOrDefaultAsync();
         if (userBd != null)
         {
+            userBd.Name = user.Name;
+            userBd.AvatarUrl = user.AvatarUrl;
+            userBd.GoogleId = user.GoogleId;
+
+        
+            await _context.SaveChangesAsync();
             return userBd;
         } 
         else
         {
-            User user = new User();
-            user.Email = email;
-            user.CreatedAt = DateTime.Now;
-            _dbSet.AddAsync(user);
+            User newUser = new User();
+            newUser.Id = Guid.NewGuid().GetHashCode();
+            newUser.Email = user.Email;
+            newUser.AvatarUrl = user.AvatarUrl;
+            newUser.Name = user.Name;
+            newUser.GoogleId = user.GoogleId;
+            newUser.CreatedAt = DateTime.Now;
+            await _dbSet.AddAsync(newUser);
             await _context.SaveChangesAsync();
-            return user;
+            return newUser;
         } 
     }
 }

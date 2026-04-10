@@ -1,6 +1,8 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using DotNetEnv;
+using Google.Apis.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -32,7 +34,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend",
         policy =>
         {
-            policy.WithOrigins("https://prezaai.ru")
+            policy.WithOrigins("https://prezaai.ru", "http://localhost:5173")
                 .AllowAnyHeader()
                 .AllowAnyMethod()
                 .AllowCredentials()
@@ -103,11 +105,12 @@ builder.Services.Configure<SmtpSettings>(opts =>
 builder.Services.AddOpenApi();
 builder.Services.AddScoped<IService, Service>();
 builder.Services.AddScoped<Random>();
-builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IEmailService, EmailServiceApi>();
 builder.Services.AddScoped<ICodeRepo, CodeRepo>();
 builder.Services.AddScoped<IUserRepo, UserRepo>();
 builder.Services.AddScoped<IFileRepo, FileRepo>();
-
+builder.Services.AddScoped<IGoogleService, GoogleService>();
+builder.Services.AddScoped<IJwtGenerator, JwtGenerator>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAiHandler, AiHandler>();
 builder.Services.AddScoped<IPptxToPdfConverter, PptxToPdfConverter>();
@@ -157,6 +160,48 @@ app.MapPost("/api/auth/login", async (IAuthService authService, [FromBody] Email
     })
     .Accepts<TextRequest>("application/json");
 
+
+app.MapPost("/api/google", async (IGoogleService googleService, IJwtGenerator jwtGenerator, [FromBody] GoogleAuthRequest request) => 
+{
+    try
+    {
+        var settings = new GoogleJsonWebSignature.ValidationSettings
+        {
+            Audience = new[] { Environment.GetEnvironmentVariable("GOOGLE_ID") }
+        };
+        var payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
+        
+        var user = await googleService.AuthenticateWithGoogleAsync(
+            payload.Subject,
+            payload.Email,
+            payload.Name,
+            payload.Picture
+        );
+        
+        var token = jwtGenerator.GenerateJwtToken(user);
+        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+        Console.WriteLine(token);
+        return Results.Ok(new { tokenString, user });
+    }
+    catch (DbUpdateException ex)
+    {
+        var innerMessage = ex.InnerException?.Message ?? "No inner exception";
+        var innerInnerMessage = ex.InnerException?.InnerException?.Message ?? "";
+        
+        Console.WriteLine($"DB ERROR: {ex.Message}");
+        Console.WriteLine($"INNER: {innerMessage}");
+        Console.WriteLine($"INNER INNER: {innerInnerMessage}");
+        
+        return Results.BadRequest(new { 
+            error = $"Database error: {innerMessage}",
+            details = innerInnerMessage
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = $"Google auth failed: {ex.Message}" });
+    }
+});
 
 
 app.MapPost("/api/text/generate", (IService service, IAiHandler aiHandler, [FromBody] TextRequest request) =>
@@ -261,8 +306,9 @@ app.MapGet("/api/presentation/pptx/{id}", [Authorize] async (int id, IService se
     {
         return Results.BadRequest($"Ошибка при создании презентации: {ex.Message}");
     }
-    
 });
+
+
 
 app.MapGet("/api/presentation/all", [Authorize] async (IFileRepo fileRepo, HttpContext httpContext) =>
 {
