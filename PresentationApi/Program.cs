@@ -118,13 +118,23 @@ builder.Services.AddScoped<ISlideController, SlideController>();
 builder.Services.AddScoped<PresentationRequest>();
 builder.Services.AddScoped<TextRequest>();
 builder.Services.AddScoped<YandexImageSearchService>();
-builder.Services.AddScoped<AppDbContext>();
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    var dbPath = Environment.GetEnvironmentVariable("DB_PATH") ?? "app.db";
+    options.UseSqlite($"Data Source={dbPath}");
+});
+
 
 var app = builder.Build();
 
-using var scope = app.Services.CreateScope();
-var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-dbContext.Database.Migrate();
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    Console.WriteLine("Applying migrations...");
+    //dbContext.Database.Migrate();
+    Console.WriteLine("Migrations applied!");
+}
 
 app.UseCors("AllowFrontend");
 
@@ -136,7 +146,6 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthentication(); 
 app.UseAuthorization();
-
 
 
 app.MapPost("/api/auth/request-code", async (IAuthService authService, [FromBody] EmailRequest request) =>
@@ -210,9 +219,9 @@ app.MapPost("/api/text/generate", (IService service, IAiHandler aiHandler, [From
 })
 .Accepts<TextRequest>("application/json");
 
-app.MapGet("/data", [Authorize] (HttpContext context) => 
+app.MapGet("/api/health", () => 
 {
-    return "Hello";
+    return "true";
 });
 
 app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpContext, 
@@ -237,6 +246,7 @@ app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpCon
             request.Prompt, 
             request.Text, 
             userId,
+            Environment.GetEnvironmentVariable("MODEL_FOR_PRES_GENERATOR") ?? "gemini-3.1-flash-lite-preview",
             yandexImageSearchService, 
             slideController, 
             aiHandler, 

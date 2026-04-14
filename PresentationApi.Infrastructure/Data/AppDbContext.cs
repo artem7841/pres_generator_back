@@ -5,15 +5,25 @@ namespace PresentationApi.Data;
 
 public class AppDbContext : DbContext
 {
-    public DbSet<User> Users => Set<User>();
-    public DbSet<LoginCode> LoginCodes => Set<LoginCode>();
-    public DbSet<Payment> Payments => Set<Payment>();
-    public DbSet<PresProject> Files => Set<PresProject>();
+    public DbSet<User> Users { get; set; }
+    public DbSet<LoginCode> LoginCodes { get; set; }
+    public DbSet<Payment> Payments { get; set; }
+    public DbSet<PresProject> Files { get; set; }
+    
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    {
+    }
+    
+    public AppDbContext() : base()
+    {
+    }
     
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        // Файл базы данных появится в папке с программой
-        optionsBuilder.UseSqlite("Data Source=app.db");
+        if (!optionsBuilder.IsConfigured)
+        {
+            optionsBuilder.UseSqlite("Data Source=app.db");
+        }
     }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
