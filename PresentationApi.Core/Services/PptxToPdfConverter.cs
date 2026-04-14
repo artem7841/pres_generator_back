@@ -1,26 +1,46 @@
 ﻿using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using PresentationCreator.interfaces;
 
 public class PptxToPdfConverter : IPptxToPdfConverter
 {
-    private readonly string _sofficePath = @"C:\\Program Files\\LibreOffice\\program\\soffice.exe";
+    private readonly string _sofficePath;
+    
+    public PptxToPdfConverter()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            _sofficePath = @"C:\Program Files\LibreOffice\program\soffice.exe";
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            _sofficePath = "/usr/bin/soffice";
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            _sofficePath = "/Applications/LibreOffice.app/Contents/MacOS/soffice";
+        }
+        else
+        {
+            throw new PlatformNotSupportedException("Unsupported operating system");
+        }
+    }
     
     public async Task<string> ConvertAsync(string inputFile, string outputDir)
     {
         Directory.CreateDirectory(outputDir);
-
-        // 1. PPTX → PDF
-        await RunProcess($"--headless --convert-to pdf --outdir \"{outputDir}\" \"{inputFile}\"");
-
-        // 2. Получаем путь к сгенерированному PDF
+   
+        var args = $"--headless --convert-to pdf --outdir \"{outputDir}\" \"{inputFile}\"";
+        
+        await RunProcess(args);
+        
         string pdfPath = Path.Combine(
             outputDir,
             Path.GetFileNameWithoutExtension(inputFile) + ".pdf"
         );
         
-        // Проверяем, существует ли файл
         if (!File.Exists(pdfPath))
         {
             throw new FileNotFoundException($"PDF файл не был создан по пути: {pdfPath}");
@@ -40,17 +60,29 @@ public class PptxToPdfConverter : IPptxToPdfConverter
                 RedirectStandardError = true,
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                // Важно для Linux контейнера
+                EnvironmentVariables = {
+                    ["HOME"] = "/tmp",
+                    ["USER"] = "root"
+                }
             }
         };
 
-        process.Start();
-        await process.WaitForExitAsync();
-
-        if (process.ExitCode != 0)
+        try
         {
-            string error = await process.StandardError.ReadToEndAsync();
-            throw new Exception($"LibreOffice error (exit code {process.ExitCode}): {error}");
+            process.Start();
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode != 0)
+            {
+                string error = await process.StandardError.ReadToEndAsync();
+                throw new Exception($"LibreOffice error (exit code {process.ExitCode}): {error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Failed to start LibreOffice at {_sofficePath}. Error: {ex.Message}");
         }
     }
 }

@@ -15,7 +15,7 @@ public class Service :  IService
         return  result.Choices[0].Message.Content;
     }
 
-    public async Task<NewPresentation> GetPresenation(string prompt, string text,  int userId,
+    public async Task<NewPresentation> GetPresenation(string prompt, string text,  int userId, string model,
         YandexImageSearchService yandexImageSearchService, ISlideController controller,
         IAiHandler aiHandler, IPptxToPdfConverter converter, IFileRepo fileRepo)
     {
@@ -27,7 +27,7 @@ public class Service :  IService
         using (PresentationDocument doc = PresentationDocument.Open(newPptxPath, true))
         {
             var promptAll = "Есть текст: " + text + File.ReadAllText("prompt.txt") + " так же нужно учесть пожелания пользователя: " + prompt;
-            var response = await aiHandler.SendMessageAsync(promptAll, "gemini-3.1-flash-lite-preview", 3000);
+            var response = await aiHandler.SendMessageAsync(promptAll, model, 3000);
             
             var jsonPre = response.Choices[0].Message.Content;
             json = ExtractJson(jsonPre);
