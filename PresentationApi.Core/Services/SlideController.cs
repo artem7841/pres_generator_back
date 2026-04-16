@@ -399,7 +399,9 @@ public class SlideController : ISlideController
             var table = new A.Table();
 
             var tableProperties = new A.TableProperties() { FirstRow = true, BandRow = true };
-            //tableProperties.Append(new A.TableStyleId("{5C1824F3-D215-4745-939A-875A79551049}"));
+            // var tableStyleId = new A.TableStyleId();
+            // tableStyleId.Text = "{5C1824F3-D215-4745-939A-875A79551049}";
+            // tableProperties.Append(tableStyleId);
             table.Append(tableProperties);
 
             // =========================
@@ -442,7 +444,7 @@ public class SlideController : ISlideController
             // =========================
             for (int row = 0; row < rowsCount; row++)
             {
-                var tableRow = new A.TableRow();
+                var tableRow = new A.TableRow() { Height = 400000 }; ;
 
                 for (int col = 0; col < columnsCount; col++)
                 {
@@ -477,6 +479,7 @@ public class SlideController : ISlideController
                     // =========================
                     // ↔ ВЫРАВНИВАНИЕ
                     // =========================
+                    var paragraph = new A.Paragraph();
                     var paraProps = new A.ParagraphProperties();
 
                     if (current?.center != null)
@@ -494,8 +497,11 @@ public class SlideController : ISlideController
                                 break;
                         }
                     }
-
-                    var paragraph = new A.Paragraph(paraProps, run);
+                    
+                    paragraph.Append(paraProps);
+                    
+                    paragraph.Append(run);
+                    paragraph.Append(new A.EndParagraphRunProperties() { Language = "ru-RU" });
 
                     var textBody = new A.TextBody(
                         new A.BodyProperties(),
@@ -508,20 +514,23 @@ public class SlideController : ISlideController
                     // =========================
                     // 🎨 ФОН ЯЧЕЙКИ
                     // =========================
-                    var cellProps = new A.TableCellProperties();
+                    var cellProps = new A.TableCellProperties() 
+                    { 
+                        Anchor = A.TextAnchoringTypeValues.Center 
+                    };
+                    
+                    cellProps.Append(new A.LeftBorderLineProperties(new A.NoFill()));
+                    cellProps.Append(new A.RightBorderLineProperties(new A.NoFill()));
+                    cellProps.Append(new A.TopBorderLineProperties(new A.NoFill()));
+                    cellProps.Append(new A.BottomBorderLineProperties(new A.NoFill()));
 
                     if (!string.IsNullOrEmpty(current?.backgroundColor))
                     {
                         cellProps.Append(new A.SolidFill(
-                            new A.RgbColorModelHex()
-                            {
-                                Val = current.backgroundColor.Replace("#", "")
-                            }
+                            new A.RgbColorModelHex() { Val = current.backgroundColor.Replace("#", "") }
                         ));
                     }
-
-                    // вертикальное выравнивание
-                    cellProps.Anchor = A.TextAnchoringTypeValues.Center;
+                    
 
                     cell.Append(cellProps);
 
@@ -532,7 +541,7 @@ public class SlideController : ISlideController
             }
 
             return table;
-        }
+        } 
 
         
         private uint GetNextShapeId(ShapeTree shapeTree)

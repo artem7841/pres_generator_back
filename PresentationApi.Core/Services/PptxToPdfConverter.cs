@@ -30,23 +30,36 @@ public class PptxToPdfConverter : IPptxToPdfConverter
     
     public async Task<string> ConvertAsync(string inputFile, string outputDir)
     {
+      
         Directory.CreateDirectory(outputDir);
-   
+
         var args = $"--headless --convert-to pdf --outdir \"{outputDir}\" \"{inputFile}\"";
-        
+
+        string pdfPath = "";
         await RunProcess(args);
-        
-        string pdfPath = Path.Combine(
-            outputDir,
-            Path.GetFileNameWithoutExtension(inputFile) + ".pdf"
-        );
-        
-        if (!File.Exists(pdfPath))
+        try
         {
-            throw new FileNotFoundException($"PDF файл не был создан по пути: {pdfPath}");
+             pdfPath = Path.Combine(
+                outputDir,
+                Path.GetFileNameWithoutExtension(inputFile) + ".pdf"
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
         }
         
+    
+        if (!File.Exists(pdfPath))
+        {
+            Console.WriteLine($"PDF файл не был создан по пути: {pdfPath}");
+            throw new FileNotFoundException($"PDF файл не был создан по пути: {pdfPath}");
+        }
+    
         return pdfPath;
+        
+  
+        
     }
 
     private async Task RunProcess(string args)

@@ -115,7 +115,7 @@ builder.Services.AddScoped<IJwtGenerator, JwtGenerator>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAiHandler, AiHandler>();
 builder.Services.AddHttpClient(); // Это добавит поддержку IHttpClientFactory
-builder.Services.AddTransient<IPptxToPdfConverter, PdfToPptx>();
+builder.Services.AddTransient<IPptxToPdfConverter, PptxToPdfConverter>();
 builder.Services.AddScoped<ISlideController, SlideController>();
 builder.Services.AddScoped<PresentationRequest>();
 builder.Services.AddScoped<TextRequest>();
