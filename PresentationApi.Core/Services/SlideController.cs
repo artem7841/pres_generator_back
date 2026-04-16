@@ -87,6 +87,7 @@ public class SlideController : ISlideController
                             }
 
                             await GetFirstSuccessfulTaskWithCancellationAsync(tasks, cts);
+                            
                         }
                         catch (Exception ex)
                         {

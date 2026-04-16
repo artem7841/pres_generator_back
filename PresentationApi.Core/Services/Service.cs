@@ -17,8 +17,25 @@ public class Service :  IService
 
     public async Task<NewPresentation> GetPresenation(string prompt, string text,  int userId,
         YandexImageSearchService yandexImageSearchService, ISlideController controller,
-        IAiHandler aiHandler, IPptxToPdfConverter converter, IFileRepo fileRepo)
+        IAiHandler aiHandler, IPptxToPdfConverter converter, IFileRepo fileRepo, 
+       IUserRepo userRepo)
     {
+        
+        var user = await userRepo.GetUserById(userId);
+        var dateNow =  DateTime.Now;
+        
+        if (!user.HasActiveSubscription)
+        {
+            var arr = await fileRepo.GetAllFiles(userId);
+            if (arr.Count() >= 3)
+            {
+                throw new Exception("Бесплатные генерации закончились!");
+            }
+        }
+            
+        if(user.SubscriptionExpiresAt < dateNow)
+             throw new Exception("Пдописка закончилась!");
+        
         string pptxPath = Path.Combine(Directory.GetCurrentDirectory(), "pres.pptx");
         string newPptxPath = Path.Combine(Directory.GetCurrentDirectory(), Guid.NewGuid().ToString() +  ".pptx");
         string json = "";
@@ -59,8 +76,23 @@ public class Service :  IService
     }
     
     public async Task<NewPresentation> CorrectPresenation(int presId, string newPrompt, int userId, YandexImageSearchService yandexImageSearchService, ISlideController controller,
-        IAiHandler aiHandler, IPptxToPdfConverter converter, IFileRepo fileRepo)
+        IAiHandler aiHandler, IPptxToPdfConverter converter, IFileRepo fileRepo, IUserRepo userRepo)
     {
+        var user = await userRepo.GetUserById(userId);
+        var dateNow =  DateTime.Now;
+        
+        if (!user.HasActiveSubscription)
+        {
+            var arr = await fileRepo.GetAllFiles(userId);
+            if (arr.Count() >= 3)
+            {
+                throw new Exception("Бесплатные генерации закончились!");
+            }
+        }
+            
+        if(user.SubscriptionExpiresAt < dateNow)
+            throw new Exception("Пдописка закончилась!");
+        
         string pptxPath = Path.Combine(Directory.GetCurrentDirectory(), "pres.pptx");
         string newPptxPath = Path.Combine(Directory.GetCurrentDirectory(), Guid.NewGuid().ToString() +  ".pptx");
         string json = "";

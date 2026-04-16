@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
 using PresentationApi.Data;
 using PresentationApi.Infrastructure.repositories;
 using PresentationCreator;
@@ -105,6 +106,7 @@ builder.Services.Configure<SmtpSettings>(opts =>
 builder.Services.AddOpenApi();
 builder.Services.AddScoped<IService, Service>();
 builder.Services.AddScoped<Random>();
+builder.Services.AddScoped<HttpClient>();
 builder.Services.AddScoped<IEmailService, EmailServiceApi>();
 builder.Services.AddScoped<ICodeRepo, CodeRepo>();
 builder.Services.AddScoped<IUserRepo, UserRepo>();
@@ -119,6 +121,8 @@ builder.Services.AddScoped<PresentationRequest>();
 builder.Services.AddScoped<TextRequest>();
 builder.Services.AddScoped<YandexImageSearchService>();
 builder.Services.AddScoped<AppDbContext>();
+builder.Services.AddScoped<IPaymentRepo, PaymentRepo>();
+builder.Services.AddScoped<IPaymentCreator, UKassaPaymentCreator>();
 
 var app = builder.Build();
 
@@ -204,6 +208,45 @@ app.MapPost("/api/google", async (IGoogleService googleService, IJwtGenerator jw
 });
 
 
+app.MapPost("/api/orders", [Authorize] async (HttpContext httpContext, IPaymentCreator paymentCreator,
+    [FromBody] OrderRequest request) =>
+{
+    Console.WriteLine(request.Amount);
+    var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
+    if (userIdClaim == null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var userId = int.Parse(userIdClaim.Value);
+
+    var url = await paymentCreator.CreatePayment(request.Amount, "http://localhost:/5173", userId);
+    return Results.Ok(url);
+});
+
+app.MapPost("/api/webhook", async (
+    IPaymentCreator paymentCreator,
+    [FromBody] YooKassaWebhook payload) =>
+{
+    Console.WriteLine("Webhook " + payload);
+
+    if (payload.Event == "payment.succeeded")
+    {
+        try
+        {
+            var paymentId = payload.Object.Metadata["paymentId"];
+            await paymentCreator.ApprovePayment(paymentId);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            return Results.BadRequest();
+        }
+    }
+
+    return Results.Ok();
+});
+
 app.MapPost("/api/text/generate", (IService service, IAiHandler aiHandler, [FromBody] TextRequest request) =>
 {
     return service.GetText(request.Text, aiHandler);
@@ -222,6 +265,8 @@ app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpCon
     IAiHandler aiHandler,
     IPptxToPdfConverter presentationConverter,
     IFileRepo fileRepo,
+    IUserRepo userRepo,
+    IPaymentRepo paymentRepo,
     [FromBody] PresentationRequest request) =>
 {
     try
@@ -232,6 +277,7 @@ app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpCon
             return Results.Unauthorized();
         }
         var userId = int.Parse(userIdClaim.Value);
+        
   
         var result = await service.GetPresenation(
             request.Prompt, 
@@ -241,7 +287,8 @@ app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpCon
             slideController, 
             aiHandler, 
             presentationConverter, 
-            fileRepo
+            fileRepo,
+            userRepo
             );
         
         httpContext.Response.Headers.Append("X-Presentation-Id", result.Id);
@@ -262,7 +309,8 @@ app.MapPost("/api/presentation/correct", [Authorize] async (HttpContext context,
     [FromBody] PresentationCorrectRequest request, YandexImageSearchService yandexImageSearchService, 
     ISlideController slideController,
     IAiHandler aiHandler,
-    IPptxToPdfConverter presentationConverter) =>
+    IPptxToPdfConverter presentationConverter,
+    IUserRepo userRepo) =>
 {
     var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier);
     if (userIdClaim == null)
@@ -279,7 +327,7 @@ app.MapPost("/api/presentation/correct", [Authorize] async (HttpContext context,
         slideController, 
         aiHandler, 
         presentationConverter, 
-        fileRepo);
+        fileRepo, userRepo);
     
     if (result ==  null)
         return Results.NotFound();

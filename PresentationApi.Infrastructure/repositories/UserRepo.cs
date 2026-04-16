@@ -43,4 +43,26 @@ public class UserRepo : IUserRepo
             return newUser;
         } 
     }
+
+    public async Task<User?> GetUserById(int id)
+    {
+        return await _dbSet.FindAsync(id);
+    }
+
+    public async Task<User> UpdatePayment(int id, int paymentId)
+    {
+        var userBD = await _dbSet.Where(u => u.Id.Equals(id)).FirstOrDefaultAsync();
+        userBD.YookassaPaymentMethodId = paymentId.ToString();
+        await _context.SaveChangesAsync();
+        return userBD;
+    }
+
+    public async Task<User> UpdateSubscription(int id, int paymentId, DateTime date)
+    {
+        var userBD = await _dbSet.Where(u => u.Id.Equals(id)).FirstOrDefaultAsync();
+        userBD.HasActiveSubscription = true;
+        userBD.SubscriptionExpiresAt =  date;
+        await _context.SaveChangesAsync();
+        return userBD;
+    }
 }

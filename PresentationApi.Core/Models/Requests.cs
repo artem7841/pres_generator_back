@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
+
 namespace PresentationCreator.Models;
 
 public class EmailAnswer
@@ -39,4 +40,10 @@ public class NewPresentation
 {
     public string Id {get; set;}
     public byte[] Data {get; set;}
+}
+
+public class OrderRequest
+{
+    [Required(ErrorMessage = "Amount is required")]
+    public string Amount {get; set;}
 }

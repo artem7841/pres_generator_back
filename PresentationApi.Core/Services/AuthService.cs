@@ -32,6 +32,12 @@ public class AuthService : IAuthService
         _userRepo =  userRepo;
     }
 
+    public async Task<User> GetUser(string id)
+    {
+        int.TryParse(id, out int userId);
+        return await _userRepo.GetUserById(userId);
+    }
+
     public async Task<EmailAnswer> SendCodeOnEmail(string email)
     {
         EmailAnswer answer = new EmailAnswer();
