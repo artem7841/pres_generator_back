@@ -18,7 +18,7 @@ public class Service :  IService
     public async Task<NewPresentation> GetPresenation(string prompt, string text,  int userId, string model,
         YandexImageSearchService yandexImageSearchService, ISlideController controller,
         IAiHandler aiHandler, IPptxToPdfConverter converter, IFileRepo fileRepo, 
-       IUserRepo userRepo)
+       IUserRepo userRepo, IImageCache imageCache)
     {
         
         var user = await userRepo.GetUserById(userId);
@@ -34,7 +34,7 @@ public class Service :  IService
         }
             
         if(user.SubscriptionExpiresAt < dateNow)
-             throw new Exception("Пдописка закончилась!");
+             throw new Exception("Подписка закончилась!");
         
         string pptxPath = Path.Combine(Directory.GetCurrentDirectory(), "pres.pptx");
         string newPptxPath = Path.Combine(Directory.GetCurrentDirectory(), Guid.NewGuid().ToString() +  ".pptx");
@@ -49,7 +49,7 @@ public class Service :  IService
             var jsonPre = response.Choices[0].Message.Content;
             json = ExtractJson(jsonPre);
  
-            await controller.BuildPresentationFromJson(json, doc, yandexImageSearchService);
+            await controller.BuildPresentationFromJson(json, doc, yandexImageSearchService, imageCache);
             
             doc.Save();
         }
@@ -76,7 +76,7 @@ public class Service :  IService
     }
     
     public async Task<NewPresentation> CorrectPresenation(int presId, string newPrompt, int userId, YandexImageSearchService yandexImageSearchService, ISlideController controller,
-        IAiHandler aiHandler, IPptxToPdfConverter converter, IFileRepo fileRepo, IUserRepo userRepo)
+        IAiHandler aiHandler, IPptxToPdfConverter converter, IFileRepo fileRepo, IUserRepo userRepo, IImageCache imageCache)
     {
         var user = await userRepo.GetUserById(userId);
         var dateNow =  DateTime.Now;
@@ -91,7 +91,7 @@ public class Service :  IService
         }
             
         if(user.SubscriptionExpiresAt < dateNow)
-            throw new Exception("Пдописка закончилась!");
+            throw new Exception("Подписка закончилась!");
         
         string pptxPath = Path.Combine(Directory.GetCurrentDirectory(), "pres.pptx");
         string newPptxPath = Path.Combine(Directory.GetCurrentDirectory(), Guid.NewGuid().ToString() +  ".pptx");
@@ -107,14 +107,15 @@ public class Service :  IService
     
         using (PresentationDocument doc = PresentationDocument.Open(newPptxPath, true))
         {
-            var promptAll = "Ты сгенерировал пезентацию для пользователя в в иде json. Текст для неее был такой: " +
-                            pres.Text + " ты выдал такой json: " + pres.Json + " теперь пользователь написал правки исправь по ним: " + newPrompt; 
+            var prompt = "Есть текст: " + pres.Text + File.ReadAllText("prompt.txt");
+            var promptAll = "Ты сгенерировал пезентацию для пользователя в виде json. промт был таклй " + prompt +  
+                            " ты выдал такой json: " + pres.Json + " теперь пользователь написал правки исправь по ним: " + newPrompt; 
             var response = await aiHandler.SendMessageAsync(promptAll, "gemini-3.1-flash-lite-preview", 3000);
             
             var jsonPre = response.Choices[0].Message.Content;
             json = ExtractJson(jsonPre);
  
-            await controller.BuildPresentationFromJson(json, doc, yandexImageSearchService);
+            await controller.BuildPresentationFromJson(json, doc, yandexImageSearchService, imageCache);
             
             doc.Save();
         }

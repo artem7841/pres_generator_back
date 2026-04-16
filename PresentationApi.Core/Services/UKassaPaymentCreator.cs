@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Headers;
+﻿using System.Globalization;
+using System.Net.Http.Headers;
 using System.Runtime.InteropServices.JavaScript;
 using System.Text;
 using Newtonsoft.Json;
@@ -92,15 +93,17 @@ public class UKassaPaymentCreator : IPaymentCreator
         var payment = await _paymentRepo.GetPayment(id);
         payment.Status = "Paid";
         await _paymentRepo.Update(payment);
+        var amount = decimal.Parse(payment.Amount, CultureInfo.InvariantCulture);
 
-        switch (payment.Amount)
+        switch (amount)
         {
-            case "199":
+            case 199m:
                 await _userRepo.UpdateSubscription(payment.UserId,  payment.Id, DateTime.Now + TimeSpan.FromDays(30));
                 break;
-            case "499":
+            case 499m:
                 await _userRepo.UpdateSubscription(payment.UserId,  payment.Id, DateTime.Now + TimeSpan.FromDays(90));
                 break;
+    
         }
     }
 }

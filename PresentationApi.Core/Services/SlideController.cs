@@ -10,12 +10,13 @@ using A = DocumentFormat.OpenXml.Drawing;
 
 public class SlideController : ISlideController
 {
-    const long emuPerPixel = 9525; // 1 пиксель ≈ 9525 EMU
+    const long emuPerPixel = 9525; 
 
     public async Task BuildPresentationFromJson(
         string json,
         PresentationDocument doc,
-        YandexImageSearchService service)
+        YandexImageSearchService service,
+        IImageCache imageCache)
     {
         var model = JsonSerializer.Deserialize<PresentationModel>(json);
         
@@ -70,26 +71,35 @@ public class SlideController : ISlideController
                         try
                         {
                             Console.WriteLine($"\n--- Изображение {imgIndex} ---");
-                            
+                            var imageFromCache = await imageCache.GetImage(image.prompt);
                             using var cts = new CancellationTokenSource();
-
-                            var imagePathsTask = service.SearchImagesAsync(image.prompt);
-                            imagePathsTask.Wait();
-                            var imagePaths = await imagePathsTask;
-                            var tasks = new List<Task<string>>();
-
-                            foreach (var imagePath in imagePaths)
+                            
+                            if (imageFromCache != null)
                             {
-                                if (!string.IsNullOrEmpty(imagePath.Url))
+                                await AddImageFromUrlAsync(slidePart, imageFromCache,
+                                    image.X, image.Y, image.width, cts.Token);
+                            }
+                            else
+                            {
+                                var imagePathsTask = service.SearchImagesAsync(image.prompt);
+                                imagePathsTask.Wait();
+                                var imagePaths = await imagePathsTask;
+                                var tasks = new List<Task<string>>();
+                                
+                                foreach (var imagePath in imagePaths)
                                 {
-                                    var task = AddImageFromUrlAsync(slidePart, imagePath.Url,
-                                        image.X, image.Y, image.width, cts.Token);
-                                    tasks.Add(task);
+                                    if (!string.IsNullOrEmpty(imagePath.Url))
+                                    {
+                                        var task = AddImageFromUrlAsync(slidePart, imagePath.Url,
+                                            image.X, image.Y, image.width, cts.Token);
+                                        tasks.Add(task);
+                                    }
                                 }
+
+                                var url = await GetFirstSuccessfulTaskWithCancellationAsync(tasks, cts);
+                                await imageCache.SetImage(image.prompt, url);
                             }
 
-                            await GetFirstSuccessfulTaskWithCancellationAsync(tasks, cts);
-                            
                         }
                         catch (Exception ex)
                         {
@@ -142,11 +152,9 @@ public class SlideController : ISlideController
             try
             {
                 string result = await completedTask;
-            
-                // Успех - отменяем все остальные задачи
+                
                 cts.Cancel();
-            
-
+                
                 return result;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -390,7 +398,8 @@ public class SlideController : ISlideController
         {
             var table = new A.Table();
 
-            var tableProperties = new A.TableProperties();
+            var tableProperties = new A.TableProperties() { FirstRow = true, BandRow = true };
+            //tableProperties.Append(new A.TableStyleId("{5C1824F3-D215-4745-939A-875A79551049}"));
             table.Append(tableProperties);
 
             // =========================
@@ -406,14 +415,14 @@ public class SlideController : ISlideController
                 {
                     if (cellTexts != null && row < cellTexts.Count && col < cellTexts[row].Count)
                     {
-                        var text = cellTexts[row][col]?.value ?? "";
+                        var text = cellTexts[row][col]?.value.Split('\n')[0] ?? "";
                         if (text.Length > maxLen)
                             maxLen = text.Length;
                     }
                 }
 
                 // магический коэффициент (подбирается)
-                colWidths[col] = maxLen * 200000;
+                colWidths[col] = maxLen * 190000;
             }
 
             // =========================

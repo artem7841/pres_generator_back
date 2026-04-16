@@ -114,7 +114,8 @@ builder.Services.AddScoped<IGoogleService, GoogleService>();
 builder.Services.AddScoped<IJwtGenerator, JwtGenerator>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAiHandler, AiHandler>();
-builder.Services.AddScoped<IPptxToPdfConverter, PptxToPdfConverter>();
+builder.Services.AddHttpClient(); // Это добавит поддержку IHttpClientFactory
+builder.Services.AddTransient<IPptxToPdfConverter, PdfToPptx>();
 builder.Services.AddScoped<ISlideController, SlideController>();
 builder.Services.AddScoped<PresentationRequest>();
 builder.Services.AddScoped<TextRequest>();
@@ -122,6 +123,16 @@ builder.Services.AddScoped<YandexImageSearchService>();
 builder.Services.AddScoped<AppDbContext>();
 builder.Services.AddScoped<IPaymentRepo, PaymentRepo>();
 builder.Services.AddScoped<IPaymentCreator, UKassaPaymentCreator>();
+
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+
+    options.Configuration = "localhost:6379";
+});
+
+builder.Services.AddScoped<IImageCache, ImageCache>();
+
+
 
 var app = builder.Build();
 
@@ -266,6 +277,7 @@ app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpCon
     IFileRepo fileRepo,
     IUserRepo userRepo,
     IPaymentRepo paymentRepo,
+    IImageCache imageCache,
     [FromBody] PresentationRequest request) =>
 {
     try
@@ -277,7 +289,6 @@ app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpCon
         }
         var userId = int.Parse(userIdClaim.Value);
         
-  
         var result = await service.GetPresenation(
             request.Prompt, 
             request.Text, 
@@ -288,7 +299,8 @@ app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpCon
             aiHandler, 
             presentationConverter, 
             fileRepo,
-            userRepo
+            userRepo,
+            imageCache
             );
         
         httpContext.Response.Headers.Append("X-Presentation-Id", result.Id);
@@ -310,33 +322,42 @@ app.MapPost("/api/presentation/correct", [Authorize] async (HttpContext context,
     ISlideController slideController,
     IAiHandler aiHandler,
     IPptxToPdfConverter presentationConverter,
+    IImageCache imageCache,
     IUserRepo userRepo) =>
 {
-    var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier);
-    if (userIdClaim == null)
+    try
     {
-        return Results.Unauthorized();
+        var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null)
+        {
+            return Results.Unauthorized();
+        }
+        var userId = int.Parse(userIdClaim.Value);
+    
+        var result = await service.CorrectPresenation(
+            request.id, 
+            request.prompt, 
+            userId,
+            yandexImageSearchService, 
+            slideController, 
+            aiHandler, 
+            presentationConverter, 
+            fileRepo,
+            userRepo,
+            imageCache);
+    
+        if (result ==  null)
+            return Results.NotFound();
+    
+        return Results.File(
+            result.Data,
+            "application/pdf",
+            $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pdf");
     }
-    var userId = int.Parse(userIdClaim.Value);
-    
-    var result = await service.CorrectPresenation(
-        request.id, 
-        request.prompt, 
-        userId,
-        yandexImageSearchService, 
-        slideController, 
-        aiHandler, 
-        presentationConverter, 
-        fileRepo,
-        userRepo);
-    
-    if (result ==  null)
-        return Results.NotFound();
-    
-    return Results.File(
-        result.Data,
-        "application/pdf",
-        $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+    catch (Exception ex)
+    {
+        return Results.BadRequest($"Ошибка при создании презентации: {ex.Message}");
+    }
 });
     
 

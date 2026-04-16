@@ -32,14 +32,16 @@
         "height": 300,
         "data": 
         [[{"value": "name11", "fontSize": 12, "fontFamily": "Calibri", "fontColor": "FFFFFF", "center": "left", "backgroundColor": "FFFFFF"}, 
-        {"value": "name12", "fontSize": 12, "fontFamily": "Calibri", "fontColor": "FFFFFF", "center": "left", "backgroundColor": "FFFFFF"}], 
+        {"value": "name12", "fontSize": 12, "fontFamily": "Calibri", "fontColor": "FFFFFF", "center": "center", "backgroundColor": "FFFFFF"}], 
         [{"value": "name21", "fontSize": 12, "fontFamily": "Calibri", "fontColor": "FFFFFF", "center": "left", "backgroundColor": "FFFFFF"}, 
-        {"value": "name22", "fontSize": 12, "fontFamily": "Calibri", "fontColor": "FFFFFF", "center": "left", "backgroundColor": "FFFFFF"}]]
+        {"value": "name22", "fontSize": 12, "fontFamily": "Calibri", "fontColor": "FFFFFF", "center": "right", "backgroundColor": "FFFFFF"}]]
       }
     }
     ]
-} делай строго по тексту, каждый слайд это один логический блок и каждому слайду соответсвует кусок исходного текста (абзац или несколько) Все размеры в пикселях, размер слайда 1280 на 720. На 1 слайд можно добавлять несколько картинок, высота картики подбирается автоматически. 
-Цвет указывай без #. Следи чтобы элементы не заходили друг на друга лучше сделать запас. 
+} делай строго по тексту, каждый слайд это один логический блок и каждому слайду соответсвует кусок исходного текста (абзац или несколько) 
+Все размеры в пикселях, размер слайда 1280 на 720. На 1 слайд можно добавлять несколько картинок, высота картики подбирается автоматически. 
+Цвет указывай без #. Следи чтобы элементы не заходили друг на друга лучше сделать запас. Таблицу добаляй только если она уместна и больше трех строчек. 
+Можешь  вставлять переносы строк если слишком длинная в таблице.
 Для  заголовков лучше выделять две строки если есть место. Prompt для картинок делай коротким и ясным
 
 
