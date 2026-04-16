@@ -18,6 +18,18 @@ RUN dotnet publish -c Release -o /app/out
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS runtime
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y \
+    libreoffice \
+    libreoffice-writer \
+    libreoffice-core \
+    fonts-dejavu \
+    fonts-liberation \
+    fonts-freefont-ttf \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pres.pptx /app/pres.pptx
+COPY prompt.txt /app/prompt.txt
+
 COPY --from=build /app/out ./
 
 VOLUME [ "/app/Data" ]
@@ -25,4 +37,4 @@ VOLUME [ "/app/Data" ]
 ENV ASPNETCORE_URLS=http://+:5000
 
 EXPOSE 5000
-ENTRYPOINT ["dotnet", "PresentattionApi.dll"]
+ENTRYPOINT ["dotnet", "PresentationApi.dll"]

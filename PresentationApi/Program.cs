@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Newtonsoft.Json;
 using PresentationApi.Data;
 using PresentationApi.Infrastructure.repositories;
 using PresentationCreator;
@@ -253,9 +252,9 @@ app.MapPost("/api/text/generate", (IService service, IAiHandler aiHandler, [From
 })
 .Accepts<TextRequest>("application/json");
 
-app.MapGet("/data", [Authorize] (HttpContext context) => 
+app.MapGet("/api/health", () => 
 {
-    return "Hello";
+    return "true";
 });
 
 app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpContext, 
@@ -283,6 +282,7 @@ app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpCon
             request.Prompt, 
             request.Text, 
             userId,
+            "gemini-3.1-flash-lite-preview",
             yandexImageSearchService, 
             slideController, 
             aiHandler, 
@@ -327,7 +327,8 @@ app.MapPost("/api/presentation/correct", [Authorize] async (HttpContext context,
         slideController, 
         aiHandler, 
         presentationConverter, 
-        fileRepo, userRepo);
+        fileRepo,
+        userRepo);
     
     if (result ==  null)
         return Results.NotFound();

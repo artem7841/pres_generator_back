@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Wordprocessing;
 using PresentationCreator.interfaces;
 using PresentationCreator.Models;
 namespace PresentationCreator;
@@ -19,6 +20,7 @@ public class SlideController : ISlideController
         var model = JsonSerializer.Deserialize<PresentationModel>(json);
         
         Console.WriteLine($"Всего слайдов: {model.slides.Count}");
+        Console.WriteLine(json);
         
         int slideIndex = 0;
         foreach (var slideData in model.slides)
@@ -96,6 +98,21 @@ public class SlideController : ISlideController
                         }
                     }
                 }
+
+                if (slideData.table != null)
+                {
+                    try
+                    {
+                        var table = slideData.table.data;
+                        AddTable(slidePart, table.Count, table[0].Count,
+                            slideData.table.X, slideData.table.Y, slideData.table.width, slideData.table.height, table);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex);
+                    }
+                    
+                }
                 
                 slidePart.Slide.Save();
                 Console.WriteLine($"Слайд {slideIndex} сохранен");
@@ -145,8 +162,6 @@ public class SlideController : ISlideController
         public SlidePart AddSlide(PresentationDocument doc, string backgroundColor = null, string bacbackgroundColor2 = null)
         {
             var presentationPart = doc.PresentationPart;
-
-            // Берём первый SlideLayout (из шаблона!)
             
             if (!presentationPart.SlideMasterParts.Any())
             {
@@ -327,6 +342,189 @@ public class SlideController : ISlideController
             shapeTree.AppendChild(textShape);
             slidePart.Slide.Save();
         }
+        
+        public void AddTable(SlidePart slidePart, int rowsCount, int columnsCount, 
+            long x = 500, long y = 200, long width = 500, long height = 100,
+            List<List<TextTableModel>> cellTexts = null, int headerRowIndex = -1)
+        {
+            // Конвертируем пиксели в EMU
+            x *= emuPerPixel;
+            y *= emuPerPixel;
+            width *= emuPerPixel;
+            height *= emuPerPixel;
+    
+            var shapeTree = slidePart.Slide.CommonSlideData.ShapeTree;
+            if (shapeTree == null)
+            {
+                shapeTree = new ShapeTree();
+                slidePart.Slide.CommonSlideData.ShapeTree = shapeTree;
+            }
+    
+            uint nextId = GetNextShapeId(shapeTree);
+    
+            // 1. Создаем графическую фреймворк для таблицы
+            var graphicFrame = new GraphicFrame(
+                new NonVisualGraphicFrameProperties(
+                    new NonVisualDrawingProperties() { Id = nextId, Name = $"Table_{nextId}" },
+                    new NonVisualGraphicFrameDrawingProperties(),
+                    new ApplicationNonVisualDrawingProperties()
+                ),
+                new Transform(
+                    new A.Offset() { X = x, Y = y },
+                    new A.Extents() { Cx = width, Cy = height }
+                ),
+                new A.Graphic(
+                    new A.GraphicData(
+                            CreateTable(rowsCount, columnsCount, cellTexts, headerRowIndex)
+                        )
+                        { Uri = "http://schemas.openxmlformats.org/drawingml/2006/table" }
+                )
+            );
+    
+            shapeTree.AppendChild(graphicFrame);
+            slidePart.Slide.Save();
+        }
+        
+        
+        private A.Table CreateTable(int rowsCount, int columnsCount, List<List<TextTableModel>> cellTexts, int headerRowIndex)
+        {
+            var table = new A.Table();
+
+            var tableProperties = new A.TableProperties();
+            table.Append(tableProperties);
+
+            // =========================
+            // 📏 АВТОШИРИНА КОЛОНОК
+            // =========================
+            var colWidths = new long[columnsCount];
+
+            for (int col = 0; col < columnsCount; col++)
+            {
+                int maxLen = 5;
+
+                for (int row = 0; row < rowsCount; row++)
+                {
+                    if (cellTexts != null && row < cellTexts.Count && col < cellTexts[row].Count)
+                    {
+                        var text = cellTexts[row][col]?.value ?? "";
+                        if (text.Length > maxLen)
+                            maxLen = text.Length;
+                    }
+                }
+
+                // магический коэффициент (подбирается)
+                colWidths[col] = maxLen * 200000;
+            }
+
+            // =========================
+            // GRID
+            // =========================
+            var tableGrid = new A.TableGrid();
+
+            for (int col = 0; col < columnsCount; col++)
+            {
+                tableGrid.Append(new A.GridColumn() { Width = colWidths[col] });
+            }
+
+            table.Append(tableGrid);
+
+            // =========================
+            // СТРОКИ
+            // =========================
+            for (int row = 0; row < rowsCount; row++)
+            {
+                var tableRow = new A.TableRow();
+
+                for (int col = 0; col < columnsCount; col++)
+                {
+                    var cell = new A.TableCell();
+
+                    TextTableModel current = null;
+                    if (cellTexts != null && row < cellTexts.Count && col < cellTexts[row].Count)
+                    {
+                        current = cellTexts[row][col];
+                    }
+
+                    string text = current?.value ?? "";
+
+                    // =========================
+                    // 🎨 ТЕКСТ
+                    // =========================
+                    var runProps = new A.RunProperties()
+                    {
+                        FontSize = (current?.fontSize ?? 12) * 100,
+                        Bold = (headerRowIndex == row)
+                    };
+
+                    if (!string.IsNullOrEmpty(current?.fontColor))
+                    {
+                        runProps.Append(new A.SolidFill(
+                            new A.RgbColorModelHex() { Val = current.fontColor.Replace("#", "") }
+                        ));
+                    }
+
+                    var run = new A.Run(runProps, new A.Text(text));
+
+                    // =========================
+                    // ↔ ВЫРАВНИВАНИЕ
+                    // =========================
+                    var paraProps = new A.ParagraphProperties();
+
+                    if (current?.center != null)
+                    {
+                        switch (current.center.ToLower())
+                        {
+                            case "center":
+                                paraProps.Alignment = A.TextAlignmentTypeValues.Center;
+                                break;
+                            case "right":
+                                paraProps.Alignment = A.TextAlignmentTypeValues.Right;
+                                break;
+                            default:
+                                paraProps.Alignment = A.TextAlignmentTypeValues.Left;
+                                break;
+                        }
+                    }
+
+                    var paragraph = new A.Paragraph(paraProps, run);
+
+                    var textBody = new A.TextBody(
+                        new A.BodyProperties(),
+                        new A.ListStyle(),
+                        paragraph
+                    );
+
+                    cell.Append(textBody);
+
+                    // =========================
+                    // 🎨 ФОН ЯЧЕЙКИ
+                    // =========================
+                    var cellProps = new A.TableCellProperties();
+
+                    if (!string.IsNullOrEmpty(current?.backgroundColor))
+                    {
+                        cellProps.Append(new A.SolidFill(
+                            new A.RgbColorModelHex()
+                            {
+                                Val = current.backgroundColor.Replace("#", "")
+                            }
+                        ));
+                    }
+
+                    // вертикальное выравнивание
+                    cellProps.Anchor = A.TextAnchoringTypeValues.Center;
+
+                    cell.Append(cellProps);
+
+                    tableRow.Append(cell);
+                }
+
+                table.Append(tableRow);
+            }
+
+            return table;
+        }
+
         
         private uint GetNextShapeId(ShapeTree shapeTree)
         {

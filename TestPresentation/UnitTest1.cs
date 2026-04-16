@@ -52,17 +52,24 @@ public class Tests
     {
         string json =
             "{\n  \"slides\": [\n    {\n      \"backgroundColor\": \"2E86AB\",\n      \"backgroundColor2\": \"1B4F72\",\n      \"texts\": [\n        {\n          \"value\": \"Растительный мир Урала: Голосеменные растения\",\n          \"fontSize\": 50,\n          \"fontFamily\": \"Calibri\",\n          \"fontColor\": \"FFFFFF\",\n          \"X\": 50,\n          \"Y\": 50,\n          \"width\": 1180,\n          \"height\": 120\n        },\n        {\n          \"value\": \"Удивительное путешествие в мир хвойных деревьев и кустарников нашего края.\",\n          \"fontSize\": 30,\n          \"fontFamily\": \"Calibri\",\n          \"fontColor\": \"E0E0E0\",\n          \"X\": 50,\n          \"Y\": 200,\n          \"width\": 600,\n          \"height\": 100\n        }\n      ],\n      \"images\": [\n        {\n          \"prompt\": \"Beautiful Ural mountains landscape with pine forest\",\n          \"X\": 700,\n          \"Y\": 200,\n          \"width\": 500\n        }\n      ]\n    }]}";
-        
+        string pptxPath = Path.Combine(Directory.GetCurrentDirectory(), "pres.pptx");
+        string newPptxPath = Path.Combine(Directory.GetCurrentDirectory(), Guid.NewGuid().ToString() +  ".pptx");
+        File.Copy(pptxPath, newPptxPath);
         
         Assert.DoesNotThrow(() =>
         {
-            using (PresentationDocument doc = PresentationDocument.Open("pres.pptx", true))
+            using (PresentationDocument doc = PresentationDocument.Open(newPptxPath, true))
             {
                 _slideController.BuildPresentationFromJson(json, doc, _yandexImageSearchService).Wait();
             }
         });
     }
-    
+
+    [Test]
+    public async Task PresCreatorTest()
+    {
+        
+    }
 
     
     private string FindSolutionRoot()
