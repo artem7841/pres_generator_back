@@ -10,13 +10,17 @@ using A = DocumentFormat.OpenXml.Drawing;
 
 public class SlideController : ISlideController
 {
-    const long emuPerPixel = 9525; 
+    const long emuPerPixel = 9525;
+    private IImageCache _imageCache;
+    private YandexImageSearchService service;
 
-    public async Task BuildPresentationFromJson(
-        string json,
-        PresentationDocument doc,
-        YandexImageSearchService service,
-        IImageCache imageCache)
+    public SlideController(IImageCache imageCache, YandexImageSearchService service)
+    {
+        _imageCache = imageCache;
+        this.service = service;
+    }
+
+    public async Task BuildPresentationFromJson(string json, PresentationDocument doc)
     {
         var model = JsonSerializer.Deserialize<PresentationModel>(json);
         
@@ -71,7 +75,7 @@ public class SlideController : ISlideController
                         try
                         {
                             Console.WriteLine($"\n--- Изображение {imgIndex} ---");
-                            var imageFromCache = await imageCache.GetImage(image.prompt);
+                            var imageFromCache = await _imageCache.GetImage(image.prompt);
                             using var cts = new CancellationTokenSource();
                             
                             if (imageFromCache != null)
@@ -97,7 +101,7 @@ public class SlideController : ISlideController
                                 }
 
                                 var url = await GetFirstSuccessfulTaskWithCancellationAsync(tasks, cts);
-                                await imageCache.SetImage(image.prompt, url);
+                                await _imageCache.SetImage(image.prompt, url);
                             }
 
                         }

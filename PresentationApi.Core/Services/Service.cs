@@ -1,5 +1,7 @@
 ﻿using System.Text;
 using DocumentFormat.OpenXml.Packaging;
+using Microsoft.Extensions.Configuration;
+using PresentationApi.Core.Exeptions;
 using PresentationCreator.interfaces;
 using PresentationCreator.Models;
 
@@ -8,6 +10,22 @@ namespace PresentationCreator;
 public class Service :  IService
 {
     private Random _random =  new Random();
+    private IAiHandler _aiHandler;
+    private IPptxToPdfConverter _converter;
+    private IFileRepo _fileRepo;
+    private IUserRepo _userRepo;
+    private ISlideController _slideController;
+
+    public Service(IAiHandler aiHandler, IPptxToPdfConverter converter, IFileRepo fileRepo, 
+        IUserRepo userRepo, ISlideController slideController)
+    {
+        _aiHandler = aiHandler;
+        _converter = converter;
+        _fileRepo = fileRepo;
+        _userRepo = userRepo;
+        _slideController = slideController;
+    }
+
     public async Task<string> GetText(string prompt, IAiHandler aiHandler)
     {
         string promptText = "Нужно сгенерировать текст для доклада по промпту пользователя, только текст без лишней информации от ИИ. Вот запрос пользователя: ";
@@ -15,26 +33,23 @@ public class Service :  IService
         return  result.Choices[0].Message.Content;
     }
 
-    public async Task<NewPresentation> GetPresenation(string prompt, string text,  int userId, string model,
-        YandexImageSearchService yandexImageSearchService, ISlideController controller,
-        IAiHandler aiHandler, IPptxToPdfConverter converter, IFileRepo fileRepo, 
-       IUserRepo userRepo, IImageCache imageCache)
+    public async Task<NewPresentation> GetPresenation(string prompt, string text,  int userId, string model)
     {
         
-        var user = await userRepo.GetUserById(userId);
+        var user = await _userRepo.GetUserById(userId);
         var dateNow =  DateTime.Now;
         
         if (!user.HasActiveSubscription)
         {
-            var arr = await fileRepo.GetAllFiles(userId);
+            var arr = await _fileRepo.GetAllFiles(userId);
             if (arr.Count() >= 3)
             {
-                throw new Exception("Бесплатные генерации закончились!");
+                throw new GenerationsEndedException("Бесплатные генерации закончились!");
             }
         }
             
         if(user.SubscriptionExpiresAt < dateNow)
-             throw new Exception("Подписка закончилась!");
+             throw new GenerationsEndedException("Подписка закончилась!");
         
         string pptxPath = Path.Combine(Directory.GetCurrentDirectory(), "pres.pptx");
         string newPptxPath = Path.Combine(Directory.GetCurrentDirectory(), Guid.NewGuid().ToString() +  ".pptx");
@@ -44,22 +59,22 @@ public class Service :  IService
         using (PresentationDocument doc = PresentationDocument.Open(newPptxPath, true))
         {
             var promptAll = "Есть текст: " + text + File.ReadAllText("prompt.txt") + " так же нужно учесть пожелания пользователя: " + prompt;
-            var response = await aiHandler.SendMessageAsync(promptAll, model, 3000);
+            var response = await _aiHandler.SendMessageAsync(promptAll, model, 3000);
             
             var jsonPre = response.Choices[0].Message.Content;
             json = ExtractJson(jsonPre);
  
-            await controller.BuildPresentationFromJson(json, doc, yandexImageSearchService, imageCache);
+            await _slideController.BuildPresentationFromJson(json, doc);
             
             doc.Save();
         }
         
         string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        string pdfPath = await converter.ConvertAsync(newPptxPath, tempDir);
+        string pdfPath = await _converter.ConvertAsync(newPptxPath, tempDir);
         byte[] pdfBytes = await System.IO.File.ReadAllBytesAsync(pdfPath);
         byte[] pptxBytes = await System.IO.File.ReadAllBytesAsync(newPptxPath);
         
-        string resultId = await fileRepo.AddFile(newPptxPath, json, text, prompt, userId, pdfBytes, pptxBytes);
+        string resultId = await _fileRepo.AddFile(newPptxPath, json, text, prompt, userId, pdfBytes, pptxBytes);
         
         NewPresentation newPresentation = new NewPresentation();
         newPresentation.Id = resultId;
@@ -70,33 +85,32 @@ public class Service :  IService
             File.Delete(newPptxPath);
             Directory.Delete(tempDir, true);
         }
-        catch { /* Логируем ошибку, но не блокируем основной процесс */ }
+        catch { Console.WriteLine("Файл pptx не удалось удалить!"); }
     
         return newPresentation;
     }
     
-    public async Task<NewPresentation> CorrectPresenation(int presId, string newPrompt, int userId, YandexImageSearchService yandexImageSearchService, ISlideController controller,
-        IAiHandler aiHandler, IPptxToPdfConverter converter, IFileRepo fileRepo, IUserRepo userRepo, IImageCache imageCache)
+    public async Task<NewPresentation> CorrectPresenation(int presId, string newPrompt, int userId)
     {
-        var user = await userRepo.GetUserById(userId);
+        var user = await _userRepo.GetUserById(userId);
         var dateNow =  DateTime.Now;
         
         if (!user.HasActiveSubscription)
         {
-            var arr = await fileRepo.GetAllFiles(userId);
+            var arr = await _fileRepo.GetAllFiles(userId);
             if (arr.Count() >= 3)
             {
-                throw new Exception("Бесплатные генерации закончились!");
+                throw new GenerationsEndedException("Бесплатные генерации закончились!"); 
             }
         }
             
         if(user.SubscriptionExpiresAt < dateNow)
-            throw new Exception("Подписка закончилась!");
+            throw new GenerationsEndedException("Подписка закончилась!");
         
         string pptxPath = Path.Combine(Directory.GetCurrentDirectory(), "pres.pptx");
         string newPptxPath = Path.Combine(Directory.GetCurrentDirectory(), Guid.NewGuid().ToString() +  ".pptx");
         string json = "";
-        var pres = await fileRepo.GetFileById(presId);
+        var pres = await _fileRepo.GetFileById(presId);
 
         if (pres.UserId != userId || pres == null)
         {
@@ -110,22 +124,22 @@ public class Service :  IService
             var prompt = "Есть текст: " + pres.Text + File.ReadAllText("prompt.txt");
             var promptAll = "Ты сгенерировал пезентацию для пользователя в виде json. промт был таклй " + prompt +  
                             " ты выдал такой json: " + pres.Json + " теперь пользователь написал правки исправь по ним: " + newPrompt; 
-            var response = await aiHandler.SendMessageAsync(promptAll, "gemini-3.1-flash-lite-preview", 3000);
+            var response = await _aiHandler.SendMessageAsync(promptAll, "gemini-3.1-flash-lite-preview", 3000);
             
             var jsonPre = response.Choices[0].Message.Content;
             json = ExtractJson(jsonPre);
  
-            await controller.BuildPresentationFromJson(json, doc, yandexImageSearchService, imageCache);
+            await _slideController.BuildPresentationFromJson(json, doc);
             
             doc.Save();
         }
         
         string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        string pdfPath = await converter.ConvertAsync(newPptxPath, tempDir);
+        string pdfPath = await _converter.ConvertAsync(newPptxPath, tempDir);
         byte[] pdfBytes = await System.IO.File.ReadAllBytesAsync(pdfPath);
         byte[] pptxBytes = await System.IO.File.ReadAllBytesAsync(newPptxPath);
         
-        string resultId = await fileRepo.ChangeFile(presId, json, pres.Text, pres.Text + newPrompt, pdfBytes, pptxBytes);
+        string resultId = await _fileRepo.ChangeFile(presId, json, pres.Text, pres.Text + newPrompt, pdfBytes, pptxBytes);
         
         NewPresentation newPresentation = new NewPresentation();
         newPresentation.Id = resultId;
@@ -136,7 +150,7 @@ public class Service :  IService
             File.Delete(newPptxPath);
             Directory.Delete(tempDir, true);
         }
-        catch { /* Логируем ошибку, но не блокируем основной процесс */ }
+        catch { Console.WriteLine("Файл pptx не удалось удалить!"); }
     
         return newPresentation;
     }

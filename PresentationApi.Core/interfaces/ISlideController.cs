@@ -7,8 +7,6 @@ public interface ISlideController
 {
     public Task BuildPresentationFromJson(
         string json,
-        PresentationDocument doc,
-        YandexImageSearchService service,
-        IImageCache imageCache);
+        PresentationDocument doc);
 
 }

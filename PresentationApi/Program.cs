@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using PresentationApi;
 using PresentationApi.Data;
 using PresentationApi.Infrastructure.repositories;
 using PresentationCreator;
@@ -102,6 +103,9 @@ builder.Services.Configure<SmtpSettings>(opts =>
     opts.EnableSsl = smtpSettings.EnableSsl;
 });
 
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 builder.Services.AddOpenApi();
 builder.Services.AddScoped<IService, Service>();
 builder.Services.AddScoped<Random>();
@@ -114,7 +118,7 @@ builder.Services.AddScoped<IGoogleService, GoogleService>();
 builder.Services.AddScoped<IJwtGenerator, JwtGenerator>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAiHandler, AiHandler>();
-builder.Services.AddHttpClient(); // Это добавит поддержку IHttpClientFactory
+builder.Services.AddHttpClient();
 builder.Services.AddTransient<IPptxToPdfConverter, PptxToPdfConverter>();
 builder.Services.AddScoped<ISlideController, SlideController>();
 builder.Services.AddScoped<PresentationRequest>();
@@ -135,6 +139,8 @@ builder.Services.AddScoped<IImageCache, ImageCache>();
 
 
 var app = builder.Build();
+
+app.UseExceptionHandler(); 
 
 using var scope = app.Services.CreateScope();
 var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -268,96 +274,59 @@ app.MapGet("/api/health", () =>
     return "true";
 });
 
-app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpContext, 
-    IService service, 
-    YandexImageSearchService yandexImageSearchService, 
-    ISlideController slideController,
-    IAiHandler aiHandler,
-    IPptxToPdfConverter presentationConverter,
-    IFileRepo fileRepo,
-    IUserRepo userRepo,
-    IPaymentRepo paymentRepo,
-    IImageCache imageCache,
+app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpContext, IService service, 
     [FromBody] PresentationRequest request) =>
 {
-    try
+
+    var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
+    if (userIdClaim == null)
     {
-        var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
-        if (userIdClaim == null)
-        {
-            return Results.Unauthorized();
-        }
-        var userId = int.Parse(userIdClaim.Value);
-        
-        var result = await service.GetPresenation(
-            request.Prompt, 
-            request.Text, 
-            userId,
-            "gemini-3.1-flash-lite-preview",
-            yandexImageSearchService, 
-            slideController, 
-            aiHandler, 
-            presentationConverter, 
-            fileRepo,
-            userRepo,
-            imageCache
-            );
-        
-        httpContext.Response.Headers.Append("X-Presentation-Id", result.Id);
-        
-        return Results.File(
-            result.Data, 
-            "application/pdf", 
-            $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+        return Results.Unauthorized();
     }
-    catch (Exception ex)
-    {
-        return Results.BadRequest($"Ошибка при создании презентации: {ex.Message}");
-    }
+    var userId = int.Parse(userIdClaim.Value);
+    
+    var result = await service.GetPresenation(
+        request.Prompt, 
+        request.Text, 
+        userId,
+        "gemini-3.1-flash-lite-preview"
+        );
+    
+    httpContext.Response.Headers.Append("X-Presentation-Id", result.Id);
+    
+    return Results.File(
+        result.Data, 
+        "application/pdf", 
+        $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+    
+
 });
 
 
-app.MapPost("/api/presentation/correct", [Authorize] async (HttpContext context, IService service, IFileRepo fileRepo,
-    [FromBody] PresentationCorrectRequest request, YandexImageSearchService yandexImageSearchService, 
-    ISlideController slideController,
-    IAiHandler aiHandler,
-    IPptxToPdfConverter presentationConverter,
-    IImageCache imageCache,
-    IUserRepo userRepo) =>
+app.MapPost("/api/presentation/correct", [Authorize] async (HttpContext context, IService service,
+    [FromBody] PresentationCorrectRequest request) =>
 {
-    try
+
+    var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier);
+    if (userIdClaim == null)
     {
-        var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier);
-        if (userIdClaim == null)
-        {
-            return Results.Unauthorized();
-        }
-        var userId = int.Parse(userIdClaim.Value);
-    
-        var result = await service.CorrectPresenation(
-            request.id, 
-            request.prompt, 
-            userId,
-            yandexImageSearchService, 
-            slideController, 
-            aiHandler, 
-            presentationConverter, 
-            fileRepo,
-            userRepo,
-            imageCache);
-    
-        if (result ==  null)
-            return Results.NotFound();
-    
-        return Results.File(
-            result.Data,
-            "application/pdf",
-            $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+        return Results.Unauthorized();
     }
-    catch (Exception ex)
-    {
-        return Results.BadRequest($"Ошибка при создании презентации: {ex.Message}");
-    }
+    var userId = int.Parse(userIdClaim.Value);
+
+    var result = await service.CorrectPresenation(
+        request.id, 
+        request.prompt, 
+        userId);
+
+    if (result ==  null)
+        return Results.NotFound();
+
+    return Results.File(
+        result.Data,
+        "application/pdf",
+        $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+
 });
     
 
