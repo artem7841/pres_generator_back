@@ -1,0 +1,192 @@
+﻿{
+  "slides": [
+    {
+      "backgroundColor": "2E86AB",
+      "backgroundColor2": "1B4F72",
+      "texts": [
+        {
+          "value": "Растительный мир Урала: Голосеменные растения",
+          "fontSize": 50,
+          "fontFamily": "Calibri",
+          "fontColor": "FFFFFF",
+          "X": 50,
+          "Y": 50,
+          "width": 1180,
+          "height": 120
+        },
+        {
+          "value": "Удивительное путешествие в мир хвойных деревьев и кустарников нашего края.",
+          "fontSize": 30,
+          "fontFamily": "Calibri",
+          "fontColor": "E0E0E0",
+          "X": 50,
+          "Y": 200,
+          "width": 600,
+          "height": 100
+        }
+      ],
+      "images": [
+        {
+          "prompt": "Beautiful Ural mountains landscape with pine forest",
+          "X": 700,
+          "Y": 200,
+          "width": 500
+        }
+      ]
+    },
+    {
+      "backgroundColor": "28B463",
+      "backgroundColor2": "186A3B",
+      "texts": [
+        {
+          "value": "Кто такие Голосеменные?",
+          "fontSize": 50,
+          "fontFamily": "Calibri",
+          "fontColor": "FFFFFF",
+          "X": 50,
+          "Y": 50,
+          "width": 1180,
+          "height": 80
+        },
+        {
+          "value": " Это древняя группа растений.\n Их семена лежат открыто на чешуйках шишек.\n Они ничем не защищены.\n На Урале - это в основном хвойные деревья.",
+          "fontSize": 32,
+          "fontFamily": "Calibri",
+          "fontColor": "FFFFFF",
+          "X": 50,
+          "Y": 150,
+          "width": 650,
+          "height": 300
+        }
+      ],
+      "images": [
+        {
+          "prompt": "pine cone with visible seeds closeup macro",
+          "X": 750,
+          "Y": 150,
+          "width": 400
+        }
+      ]
+    },
+    {
+      "backgroundColor": "D35400",
+      "backgroundColor2": "A04000",
+      "texts": [
+        {
+          "value": "Сосна и Ель: хозяева леса",
+          "fontSize": 50,
+          "fontFamily": "Calibri",
+          "fontColor": "FFFFFF",
+          "X": 50,
+          "Y": 50,
+          "width": 1180,
+          "height": 80
+        },
+        {
+          "value": "Сосна обыкновенная: любит свет, золотистый ствол, хвоинки сидят парами.\n\nЕль сибирская: теневыносливая, колючая, хвоинки поодиночке. Из нее делают музыкальные инструменты.",
+          "fontSize": 28,
+          "fontFamily": "Calibri",
+          "fontColor": "FFFFFF",
+          "X": 50,
+          "Y": 150,
+          "width": 600,
+          "height": 400
+        }
+      ],
+      "images": [
+        {
+          "prompt": "scots pine tree in sunny forest",
+          "X": 700,
+          "Y": 150,
+          "width": 250
+        },
+        {
+          "prompt": "spruce tree branches dense dark green",
+          "X": 960,
+          "Y": 150,
+          "width": 250
+        }
+      ]
+    },
+    {
+      "backgroundColor": "2C3E50",
+      "backgroundColor2": "17202A",
+      "texts": [
+        {
+          "value": "Необычные жители лесов: Лиственница и Кедр",
+          "fontSize": 50,
+          "fontFamily": "Calibri",
+          "fontColor": "FFFFFF",
+          "X": 50,
+          "Y": 50,
+          "width": 1180,
+          "height": 80
+        },
+        {
+          "value": "Лиственница: сбрасывает хвою на зиму, прочная древесина.\n\nСосна сибирская (Кедр): дает вкусные орехи, любимое лакомство бурундуков.",
+          "fontSize": 32,
+          "fontFamily": "Calibri",
+          "fontColor": "FFFFFF",
+          "X": 50,
+          "Y": 150,
+          "width": 600,
+          "height": 300
+        }
+      ],
+      "images": [
+        {
+          "prompt": "larch tree in autumn with yellow needles",
+          "X": 700,
+          "Y": 150,
+          "width": 250
+        },
+        {
+          "prompt": "cedar pine cones and nuts on branch",
+          "X": 960,
+          "Y": 150,
+          "width": 250
+        }
+      ]
+    },
+    {
+      "backgroundColor": "8E44AD",
+      "backgroundColor2": "5B2C6F",
+      "texts": [
+        {
+          "value": "Пихта и Можжевельник",
+          "fontSize": 50,
+          "fontFamily": "Calibri",
+          "fontColor": "FFFFFF",
+          "X": 50,
+          "Y": 50,
+          "width": 1180,
+          "height": 80
+        },
+        {
+          "value": "Пихта: мягкая хвоя, ароматные ветки для бани.\n\nМожжевельник: единственный кустарник, съедобные шишкоягоды.",
+          "fontSize": 32,
+          "fontFamily": "Calibri",
+          "fontColor": "FFFFFF",
+          "X": 50,
+          "Y": 150,
+          "width": 600,
+          "height": 300
+        }
+      ],
+      "images": [
+        {
+          "prompt": "fir tree branches closeup",
+          "X": 700,
+          "Y": 150,
+          "width": 250
+        },
+        {
+          "prompt": "juniper bush with blue berries",
+          "X": 960,
+          "Y": 150,
+          "width": 250
+        }
+      ]
+    }
+  ]
+}

@@ -73,7 +73,7 @@ public class PresentationController : ControllerBase
         return Results.Ok(files);
     }
     
-    [HttpGet("{id}")]
+    [HttpGet("pptx/{id}")]
     [Authorize]
     public async Task<IResult> GetPresForId(int id, [FromServices] IService service, [FromServices] IFileRepo fileRepo)
     {

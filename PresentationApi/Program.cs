@@ -156,6 +156,29 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.MapPost("/api/webhook", async (
+    IPaymentCreator paymentCreator,
+    [FromBody] YooKassaWebhook payload) =>
+{
+    Console.WriteLine("Webhook " + payload);
+
+    if (payload.Event == "payment.succeeded")
+    {
+        try
+        {
+            var paymentId = payload.Object.Metadata["paymentId"];
+            await paymentCreator.ApprovePayment(paymentId);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            return Results.BadRequest();
+        }
+    }
+
+    return Results.Ok();
+});
+
 app.MapGet("/api/health", () => 
 {
     return "true";
