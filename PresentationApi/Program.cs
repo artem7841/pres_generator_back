@@ -110,7 +110,9 @@ builder.Services.AddOpenApi();
 builder.Services.AddScoped<IService, Service>();
 builder.Services.AddScoped<Random>();
 builder.Services.AddScoped<HttpClient>();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IEmailService, EmailServiceApi>();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<ICodeRepo, CodeRepo>();
 builder.Services.AddScoped<IUserRepo, UserRepo>();
 builder.Services.AddScoped<IFileRepo, FileRepo>();
@@ -119,257 +121,45 @@ builder.Services.AddScoped<IJwtGenerator, JwtGenerator>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAiHandler, AiHandler>();
 builder.Services.AddHttpClient();
-builder.Services.AddTransient<IPptxToPdfConverter, PptxToPdfConverter>();
+builder.Services.AddTransient<IPptxToPdfConverter, PdfToPptxDockerConverter>();
 builder.Services.AddScoped<ISlideController, SlideController>();
-builder.Services.AddScoped<PresentationRequest>();
-builder.Services.AddScoped<TextRequest>();
 builder.Services.AddScoped<YandexImageSearchService>();
 builder.Services.AddScoped<AppDbContext>();
 builder.Services.AddScoped<IPaymentRepo, PaymentRepo>();
 builder.Services.AddScoped<IPaymentCreator, UKassaPaymentCreator>();
+builder.Services.AddControllers();
 
 builder.Services.AddStackExchangeRedisCache(options =>
 {
 
-    options.Configuration = "localhost:6379";
+    options.Configuration = Environment.GetEnvironmentVariable("REDIS_STRING");
 });
 
 builder.Services.AddScoped<IImageCache, ImageCache>();
 
-
-
 var app = builder.Build();
 
 app.UseExceptionHandler(); 
+app.UseCors("AllowFrontend");
+app.UseHttpsRedirection();
+app.UseAuthentication(); 
+app.UseAuthorization();
+app.MapControllers(); 
 
 using var scope = app.Services.CreateScope();
 var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 dbContext.Database.Migrate();
 
-app.UseCors("AllowFrontend");
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
-app.UseAuthentication(); 
-app.UseAuthorization();
-
-
-
-app.MapPost("/api/auth/request-code", async (IAuthService authService, [FromBody] EmailRequest request) =>
-{
-    var result =  await authService.SendCodeOnEmail(request.Email);
-    return Results.Ok(result);
-})
-.Accepts<TextRequest>("application/json");
-
-app.MapPost("/api/auth/login", async (IAuthService authService, [FromBody] EmailCodeLogin request) => 
-    { 
-        try
-        {
-            var result = await authService.ApproveCode(request.Email, request.Code);
-            return Results.Ok(result);
-        }
-        catch (Exception ex)
-        {
-            return Results.BadRequest(ex.Message);
-        }
-    })
-    .Accepts<TextRequest>("application/json");
-
-
-app.MapPost("/api/google", async (IGoogleService googleService, IJwtGenerator jwtGenerator, [FromBody] GoogleAuthRequest request) => 
-{
-    try
-    {
-        var settings = new GoogleJsonWebSignature.ValidationSettings
-        {
-            Audience = new[] { Environment.GetEnvironmentVariable("GOOGLE_ID") }
-        };
-        var payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
-        
-        var user = await googleService.AuthenticateWithGoogleAsync(
-            payload.Subject,
-            payload.Email,
-            payload.Name,
-            payload.Picture
-        );
-        
-        var token = jwtGenerator.GenerateJwtToken(user);
-        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
-        Console.WriteLine(token);
-        return Results.Ok(new { tokenString, user });
-    }
-    catch (DbUpdateException ex)
-    {
-        var innerMessage = ex.InnerException?.Message ?? "No inner exception";
-        var innerInnerMessage = ex.InnerException?.InnerException?.Message ?? "";
-        
-        Console.WriteLine($"DB ERROR: {ex.Message}");
-        Console.WriteLine($"INNER: {innerMessage}");
-        Console.WriteLine($"INNER INNER: {innerInnerMessage}");
-        
-        return Results.BadRequest(new { 
-            error = $"Database error: {innerMessage}",
-            details = innerInnerMessage
-        });
-    }
-    catch (Exception ex)
-    {
-        return Results.BadRequest(new { error = $"Google auth failed: {ex.Message}" });
-    }
-});
-
-
-app.MapPost("/api/orders", [Authorize] async (HttpContext httpContext, IPaymentCreator paymentCreator,
-    [FromBody] OrderRequest request) =>
-{
-    Console.WriteLine(request.Amount);
-    var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
-    if (userIdClaim == null)
-    {
-        return Results.Unauthorized();
-    }
-
-    var userId = int.Parse(userIdClaim.Value);
-
-    var url = await paymentCreator.CreatePayment(request.Amount, "http://localhost:/5173", userId);
-    return Results.Ok(url);
-});
-
-app.MapPost("/api/webhook", async (
-    IPaymentCreator paymentCreator,
-    [FromBody] YooKassaWebhook payload) =>
-{
-    Console.WriteLine("Webhook " + payload);
-
-    if (payload.Event == "payment.succeeded")
-    {
-        try
-        {
-            var paymentId = payload.Object.Metadata["paymentId"];
-            await paymentCreator.ApprovePayment(paymentId);
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-            return Results.BadRequest();
-        }
-    }
-
-    return Results.Ok();
-});
-
-app.MapPost("/api/text/generate", (IService service, IAiHandler aiHandler, [FromBody] TextRequest request) =>
-{
-    return service.GetText(request.Text, aiHandler);
-})
-.Accepts<TextRequest>("application/json");
-
 app.MapGet("/api/health", () => 
 {
     return "true";
 });
-
-app.MapPost("/api/presentation/generate", [Authorize] async (HttpContext httpContext, IService service, 
-    [FromBody] PresentationRequest request) =>
-{
-
-    var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
-    if (userIdClaim == null)
-    {
-        return Results.Unauthorized();
-    }
-    var userId = int.Parse(userIdClaim.Value);
-    
-    var result = await service.GetPresenation(
-        request.Prompt, 
-        request.Text, 
-        userId,
-        "gemini-3.1-flash-lite-preview"
-        );
-    
-    httpContext.Response.Headers.Append("X-Presentation-Id", result.Id);
-    
-    return Results.File(
-        result.Data, 
-        "application/pdf", 
-        $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pdf");
-    
-
-});
-
-
-app.MapPost("/api/presentation/correct", [Authorize] async (HttpContext context, IService service,
-    [FromBody] PresentationCorrectRequest request) =>
-{
-
-    var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier);
-    if (userIdClaim == null)
-    {
-        return Results.Unauthorized();
-    }
-    var userId = int.Parse(userIdClaim.Value);
-
-    var result = await service.CorrectPresenation(
-        request.id, 
-        request.prompt, 
-        userId);
-
-    if (result ==  null)
-        return Results.NotFound();
-
-    return Results.File(
-        result.Data,
-        "application/pdf",
-        $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pdf");
-
-});
-    
-
-app.MapGet("/api/presentation/pptx/{id}", [Authorize] async (int id, IService service, IFileRepo fileRepo) =>
-{
-    try
-    {
-        var result = await service.GetPresenationPptx(id, fileRepo);
-        Console.WriteLine(result.Length+ "fd");
-        return Results.File(
-            result, 
-            "application/pptx", 
-            $"presentation_{DateTime.Now:yyyyMMddHHmmss}.pptx");
-    }
-    catch (Exception ex)
-    {
-        return Results.BadRequest($"Ошибка при создании презентации: {ex.Message}");
-    }
-});
-
-
-
-app.MapGet("/api/presentation/all", [Authorize] async (IFileRepo fileRepo, HttpContext httpContext) =>
-{
-    try
-    {
-        var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
-        if (userIdClaim == null)
-        {
-            return Results.Unauthorized();
-        }
-
-        var userId = int.Parse(userIdClaim.Value);
-        var files = await fileRepo.GetAllFiles(userId);
-        return Results.Ok(files);
-    }
-    catch (Exception ex)
-    {
-        return Results.BadRequest($"Ошибка получения проектов: {ex.Message}");
-    }
-
-});
-
 
 app.Run();
 

@@ -22,36 +22,36 @@ public class AppDbContext : DbContext
     {
         if (!optionsBuilder.IsConfigured)
         {
-            optionsBuilder.UseSqlite("Data Source=app.db");
+            var connectionString = Environment.GetEnvironmentVariable("DOCKER_RUNNING") == "true"
+                ? "Data Source=/app/data/app.db"
+                : "Data Source=app.db";
+            optionsBuilder.UseSqlite(connectionString);
         }
     }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Настройка внешних ключей и индексов
         modelBuilder.Entity<LoginCode>()
             .HasOne(l => l.User)
             .WithMany(u => u.LoginCodes)
             .HasForeignKey(l => l.UserId)
-            .OnDelete(DeleteBehavior.SetNull); // Если пользователя удалят, коды останутся, но UserId станет NULL
+            .OnDelete(DeleteBehavior.SetNull); 
             
         modelBuilder.Entity<Payment>()
             .HasOne(p => p.User)
             .WithMany()
             .HasForeignKey(p => p.UserId)
-            .OnDelete(DeleteBehavior.Cascade); // Если пользователя удалят, удалятся и его платежи
-            
-        // Индекс для быстрого поиска по email (ускоряет авторизацию)
+            .OnDelete(DeleteBehavior.Cascade); 
+        
         modelBuilder.Entity<User>()
             .HasIndex(u => u.Email)
-            .IsUnique(); // email не должен повторяться
+            .IsUnique(); 
 
         modelBuilder.Entity<PresProject>()
             .HasOne(f => f.User)
             .WithMany()
             .HasForeignKey(p => p.UserId);
-            
-        // Индекс для быстрого поиска кодов по email
+        
         modelBuilder.Entity<LoginCode>()
             .HasIndex(l => l.Email);
     }

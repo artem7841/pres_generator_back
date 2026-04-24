@@ -63,8 +63,12 @@ public class PaymentRepo : IPaymentRepo
     {
         try
         {
-            Payment result = await _dbSet.Where(p => p.Id.Equals(paymentId)).FirstOrDefaultAsync();
-            return result;
+            if (int.TryParse(paymentId, out int id))
+            {
+                return await _dbSet.FirstOrDefaultAsync(p => p.Id == id);
+            }
+            
+            return await _dbSet.FirstOrDefaultAsync(p => p.Id.ToString() == paymentId);
         }
         catch (Exception e)
         {

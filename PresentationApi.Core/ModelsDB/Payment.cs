@@ -10,6 +10,5 @@ public class Payment
     public DateTime CreatedAt { get; set; }
     public DateTime? PaidAt { get; set; }
     
-    // Связь с пользователем
     public User User { get; set; } = null!;
 }
