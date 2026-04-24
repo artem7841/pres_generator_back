@@ -4,16 +4,19 @@ services:
     ports:
       - "5000:5000"
     volumes:
-    - ./.env:/app/.env
+      - ./.env:/app/.env
+      - sqlite_data:/app/data  # Добавьте это для сохранения SQLite базы
     env_file:
       - .env
     environment:
       - ASPNETCORE_URLS=http://+:5000
       - Redis__ConnectionString=redis:6379
       - Converter__Url=http://converter:3000/
+      - DOCKER_RUNNING=true
     depends_on:
       - redis
       - converter
+    restart: unless-stopped  # Рекомендуется добавить политику перезапуска
 
   redis:
     image: redis:alpine
@@ -21,9 +24,17 @@ services:
       - "6380:6379"
     volumes:
       - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes  # Сохранять данные на диск
 
   converter:
     image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    # Если Gotenberg нужен persistent storage:
+    # volumes:
+    #   - converter_data:/tmp
 
 volumes:
   redis_data:
+  sqlite_data:  # Добавлено для SQLite
+  # converter_data:  # Раскомментируйте если нужно

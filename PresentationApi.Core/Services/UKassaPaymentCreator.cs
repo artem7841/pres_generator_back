@@ -22,6 +22,7 @@ public class UKassaPaymentCreator : IPaymentCreator
         _shopId = Environment.GetEnvironmentVariable("YOO_SHOP_ID");;
         _secretKey = Environment.GetEnvironmentVariable("YOO_SECERET_KEY");
         _paymentRepo = paymentRepo;
+        _userRepo = userRepo;
     }
 
     public async Task<string> CreatePayment(string price, string return_url, int userId)
@@ -55,7 +56,7 @@ public class UKassaPaymentCreator : IPaymentCreator
             description = "Оплата заказа #123",
             metadata = new
             {
-                paymentId = payment.Id
+                paymentId = payment.Id.ToString(),
             }
         };
 
@@ -91,19 +92,46 @@ public class UKassaPaymentCreator : IPaymentCreator
     public async Task ApprovePayment(string id)
     {
         var payment = await _paymentRepo.GetPayment(id);
+
+        if (payment == null)
+        {
+            Console.WriteLine($"Платеж с id {id} не найден");
+            throw new Exception($"Payment {id} not found");
+        }
+        
+        if (string.IsNullOrEmpty(payment.Amount))
+        {
+            Console.WriteLine($"Amount для платежа {id} пустой");
+            throw new Exception($"Amount is empty for payment {id}");
+        }
+    
         payment.Status = "Paid";
         await _paymentRepo.Update(payment);
-        var amount = decimal.Parse(payment.Amount, CultureInfo.InvariantCulture);
+        
+        if (!decimal.TryParse(payment.Amount, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount))
+        {
+            Console.WriteLine($"Не удалось распарсить Amount: {payment.Amount}");
+            throw new Exception($"Invalid amount format: {payment.Amount}");
+        }
 
+        DateTime newExpiryDate;
         switch (amount)
         {
-            case 199m:
-                await _userRepo.UpdateSubscription(payment.UserId,  payment.Id, DateTime.Now + TimeSpan.FromDays(30));
+            case 5m:
+                newExpiryDate = DateTime.Now + TimeSpan.FromDays(30);
+                Console.WriteLine($"Updating subscription for 30 days, expires: {newExpiryDate}");
+                await _userRepo.UpdateSubscription(payment.UserId, payment.Id, newExpiryDate);
                 break;
             case 499m:
-                await _userRepo.UpdateSubscription(payment.UserId,  payment.Id, DateTime.Now + TimeSpan.FromDays(90));
+                newExpiryDate = DateTime.Now + TimeSpan.FromDays(90);
+                Console.WriteLine($"Updating subscription for 90 days, expires: {newExpiryDate}");
+                await _userRepo.UpdateSubscription(payment.UserId, payment.Id, newExpiryDate);
                 break;
-    
+            default:
+                Console.WriteLine($"Unknown amount: {amount}, no subscription updated");
+                break;
         }
+        
+        Console.WriteLine($"Payment {id} successfully approved");
     }
 }
